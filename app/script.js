@@ -1,6 +1,6 @@
 // Global Setup
 const client = new Buttplug.ButtplugClient("Teledildonics 101 Client"); 
-const fconnector = new Buttplug.ButtplugClientForwarderBrowserWebsocketConnector("ws://" + window.location.hostname + ":13345");
+const fconnector = new Buttplug.ButtplugClientForwarderBrowserWebsocketConnector("wss://" + window.location.hostname + ":13345");
 const forwarder = new Buttplug.ButtplugClientForwarder("Forwarder connector", fconnector);
 forwarder.Connect().then(() => console.log("Forwarder connected."));
 const container = document.getElementById("device-list");
