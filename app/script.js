@@ -1,6 +1,6 @@
 // Global Setup
-const client = new Buttplug.ButtplugClient("Teledildonics 101 Client"); 
-const fconnector = new Buttplug.ButtplugClientForwarderBrowserWebsocketConnector("wss://" + window.location.hostname + ":13345");
+const client = new Buttplug.ButtplugClient("Teledildonics 101 Client");
+const fconnector = new Buttplug.ButtplugClientForwarderBrowserWebsocketConnector("wss://" + window.location.hostname + "/forwarder");
 const forwarder = new Buttplug.ButtplugClientForwarder("Forwarder connector", fconnector);
 forwarder.Connect().then(() => console.log("Forwarder connected."));
 const container = document.getElementById("device-list");
@@ -72,7 +72,7 @@ function create_linear_controller(device_div, device) {
   const min_slider = document.getElementById(`${control_id}-min`);
   const max_slider = document.getElementById(`${control_id}-max`);
   const duration_slider = document.getElementById(`${control_id}-duration`);
-  
+
   const run_oscillate = async (goto_max) => {
     if (!checkbox.checked) return;
     if (goto_max) {
@@ -85,8 +85,8 @@ function create_linear_controller(device_div, device) {
   checkbox.addEventListener("click", () => {
     if (checkbox.checked) run_oscillate(true);
   });
-  
-  
+
+
 }
 
 // Start Scanning Button Click Event Handler
@@ -99,25 +99,25 @@ const startLocalConnection = async function() {
     device_div.appendChild(device_title);
     device_div.id = `device-${device.Index}`;
     container.appendChild(device_div);
-    
+
     if (device.AllowedMessages.includes("VibrateCmd")) {
       create_vibration_controller(device_div, device);
     }
-    
+
     if (device.AllowedMessages.includes("RotateCmd")) {
       create_rotation_controller(device_div, device);
     }
-    
+
     if (device.AllowedMessages.includes("LinearCmd")) {
       create_linear_controller(device_div, device);
     }
   });
-  
+
   client.addListener('deviceremoved', (device) => {
     const device_div = document.getElementById(`device-${device.Index}`);
     container.removeChild(device_div);
   });
-  
+
   const connector = new Buttplug.ButtplugEmbeddedClientConnector();
   await client.Connect(connector);
   console.log("Connected!");

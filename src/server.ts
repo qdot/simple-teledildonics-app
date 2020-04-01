@@ -1,10 +1,20 @@
-import { ButtplugLogger, ButtplugServerForwardedConnector, ForwardedDeviceManager, FromJSON, ButtplugMessage, ButtplugLogLevel } from "buttplug";
+import { ButtplugLogger, ButtplugServerForwardedConnector, ForwardedDeviceManager, FromJSON, ButtplugMessage, ButtplugLogLevel, ButtplugServer } from "buttplug";
 import { ButtplugNodeWebsocketServer } from "buttplug-node-websockets";
 import Websocket from "ws";
 import * as http from "http";
 import { promisify } from "util";
 import { EventEmitter } from "events";
 import express from "express";
+import expressWs from "express-ws";
+
+const app = expressWs(express()).app;
+// make all the files in 'public' available
+// https://expressjs.com/en/starter/static-files.html
+app.use(express.static(__dirname + "/app"));
+
+const listener = app.listen(process.env.PORT, () => {
+ console.log("Your app is listening on port " + (listener.address()! as Websocket.AddressInfo).port);
+});
 
 /**
  * Derives from the base ButtplugServer class, adds capabilities to the server
@@ -41,8 +51,10 @@ export class ButtplugServerForwardedNodeWebsocketConnector extends EventEmitter 
    * @param host Host address to listen on (defaults to localhost)
    */
   public Listen = (): Promise<void> => {
+    /*
     this.httpServer = http.createServer().listen(this._port, this._host);
     this.wsServer = new Websocket.Server({ server: this.httpServer });
+    */
     this.InitServer();
     return Promise.resolve();
   }
@@ -74,10 +86,7 @@ export class ButtplugServerForwardedNodeWebsocketConnector extends EventEmitter 
    * Used to set up server after Websocket connection created.
    */
   private InitServer = () => {
-    if (this.wsServer === null) {
-      throw new Error("Websocket server is null!");
-    }
-    this.wsServer.on("connection", (client) => {
+    app.ws('/forwarder', (client, req) => {
       console.log("Got client connection for forwarder");
       this.wsClientClosure = (msg: string) => client.send(msg);
       client.on("error", (err) => {
@@ -96,25 +105,65 @@ export class ButtplugServerForwardedNodeWebsocketConnector extends EventEmitter 
   }
 }
 
-const app = express();
+export class ButtplugExpressWebsocketServer extends ButtplugServer {
+  public constructor(name: string, maxPingTime: number = 0) {
+    super(name, maxPingTime);
+  }
 
-// make all the files in 'public' available
-// https://expressjs.com/en/starter/static-files.html
-app.use(express.static("../app"));
+  public get IsRunning(): boolean {
+    return true;
+  }
 
-// https://expressjs.com/en/starter/basic-routing.html
-app.get("/", (request, response) => {
-  response.sendFile(__dirname + "../app/index.html");
-});
+  /**
+   * Starts an insecure (non-ssl) instance of the server. This server will not
+   * be accessible from clients/applications running on https instances.
+   *
+   * @param port Network port to listen on (defaults to 12345)
+   * @param host Host address to listen on (defaults to localhost)
+   */
+  public StartInsecureServer = (port: number = 12345, host: string = "localhost") => {
+    this.InitServer();
+  }
 
-// listen for requests :)
-const listener = app.listen(8080, () => {
-  console.log("Your app is listening on port " + (listener.address()! as Websocket.AddressInfo).port);
-});
+  /**
+   * Shuts down the server, closing all connections.
+   */
+  public StopServer = async (): Promise<void> => {
+    await this.Shutdown();
+  }
+
+  /**
+   * Used to set up server after Websocket connection created.
+   */
+  private InitServer = () => {
+    const bs: ButtplugServer = this;
+    app.ws('/', (client, req) => {
+      client.on("error", (err) => {
+        console.log(`Error in websocket connection: ${err.message}`);
+        client.terminate();
+      });
+      client.on("message", async (message) => {
+        const msg = FromJSON(message);
+        for (const m of msg) {
+          const outgoing = await bs.SendMessage(m);
+          // Make sure our message is packed in an array, as the buttplug spec
+          // requires.
+          client.send("[" + outgoing.toJSON() + "]");
+        }
+      });
+
+      bs.on("message", function outgoing(message) {
+        // Make sure our message is packed in an array, as the buttplug spec
+        // requires.
+        client.send("[" + message.toJSON() + "]");
+      });
+    });
+  }
+}
 
 async function main(): Promise<void> {
     ButtplugLogger.Logger.MaximumConsoleLogLevel = ButtplugLogLevel.Debug;
-    const server = new ButtplugNodeWebsocketServer("Remote Server", 0);
+    const server = new ButtplugExpressWebsocketServer("Remote Server", 0);
     const connector = new ButtplugServerForwardedNodeWebsocketConnector();
     console.log("Starting forwarder listener...");
     connector.Listen();
