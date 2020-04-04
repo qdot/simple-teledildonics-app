@@ -1,3 +1,7 @@
+///////////////////////////////////////
+// UI Functions
+///////////////////////////////////////
+
 function create_vibration_controller(device_div, device) {
   const control_div = document.createElement("div");
   const control_id = `vibrate-${device.Index}`;
@@ -8,7 +12,7 @@ function create_vibration_controller(device_div, device) {
   <label for="${control_id}">Vibration Speed</label>`;
   device_div.appendChild(control_div);
   const slider = document.getElementById(control_id);
-  slider.addEventListener("input", async function(ev) {
+  slider.addEventListener("input", async function (ev) {
     await device.SendVibrateCmd(slider.value / 100.0);
   });
 }
@@ -23,7 +27,7 @@ function create_rotation_controller(device_div, device) {
   <label for="${control_id}">Rotation Speed</label>`;
   device_div.appendChild(control_div);
   const slider = document.getElementById(control_id);
-  slider.addEventListener("input", async function(ev) {
+  slider.addEventListener("input", async function (ev) {
     await device.SendRotateCmd(Math.abs(slider.value / 100.0), slider.value < 0);
   });
 }
@@ -53,7 +57,7 @@ function create_linear_controller(device_div, device) {
   const min_slider = document.getElementById(`${control_id}-min`);
   const max_slider = document.getElementById(`${control_id}-max`);
   const duration_slider = document.getElementById(`${control_id}-duration`);
-  
+
   const run_oscillate = async (goto_max) => {
     if (!checkbox.checked) return;
     if (goto_max) {
@@ -68,17 +72,84 @@ function create_linear_controller(device_div, device) {
   });
 }
 
+function create_device_controls_div(container, device, can_share = false) {
+  console.log(`${device.Name} connected!`);
+  const device_div = document.createElement("div");
+  const device_title = document.createElement("h2");
+  device_title.innerHTML = device.Name;
+  device_div.appendChild(device_title);
+  device_div.id = `device-${device.Index}`;
+
+  if (can_share) {
+    const device_share_checkbox = document.createElement("input");
+    device_share_checkbox.type = "checkbox";
+    const device_share_checkbox_label = document.createElement("label");
+    device_share_checkbox_label.for = device_share_checkbox;
+    device_share_checkbox_label.innerHTML = "Share Control";
+    device_div.appendChild(device_share_checkbox);
+    device_div.appendChild(device_share_checkbox_label);
+
+    device_share_checkbox.addEventListener("click", (ev) => {
+      if (device_share_checkbox.checked) {
+        forwarder.AddDevice(device).then(() => console.log("Device shared"));
+      } else {
+        forwarder.RemoveDevice(device).then(() => console.log("Device unshared"));
+      }
+    });
+  }
+
+  container.appendChild(device_div);
+
+  if (device.AllowedMessages.includes("VibrateCmd")) {
+    create_vibration_controller(device_div, device);
+  }
+
+  if (device.AllowedMessages.includes("RotateCmd")) {
+    create_rotation_controller(device_div, device);
+  }
+
+  if (device.AllowedMessages.includes("LinearCmd")) {
+    create_linear_controller(device_div, device);
+  }
+}
+
+///////////////////////////////////////
+// Generic Connector Setup
+///////////////////////////////////////
+
+function setup_client(client, connector, container) {
+  client.addListener('deviceadded', async (device) => {
+    create_device_controls_div(container, device, true);
+  });
+
+  client.addListener('deviceremoved', (device) => {
+    const device_div = document.getElementById(`device-${device.Index}`);
+    container.removeChild(device_div);
+  });
+
+  client.addListener('disconnect', () => {
+    for (const child of container.children) {
+      container.removeChild(child);
+    }
+  });
+
+  await client.Connect(connector);
+  console.log("Connected!");
+}
+
+///////////////////////////////////////
+// Local Connector
+///////////////////////////////////////
+
 class ButtplugClientForwarderBrowserWebsocketPasswordConnector extends Buttplug.ButtplugClientForwarderBrowserWebsocketConnector {
   constructor(host) {
     super(host);
     console.log("creating connector?!");
     this.Initialize = async () => {
-      console.log("Connecting using derived class?!");
-      console.log(this);
       let res;
       let rej;
       const p = new Promise((rs, rj) => { res = rs; rej = rj; });
-      const msgHandler = (ev) => { 
+      const msgHandler = (ev) => {
         if (ev.data === "ok") {
           console.log("Got correct password return");
           document.getElementById("local-control").style.display = "block";
@@ -102,66 +173,26 @@ class ButtplugClientForwarderBrowserWebsocketPasswordConnector extends Buttplug.
   }
 }
 
-const client = new Buttplug.ButtplugClient("Teledildonics 101 Client"); 
-
 // Start Scanning Button Click Event Handler
-const startLocalConnection = async function() {
-  // Global Setup
+const startLocalConnection = async function () {
+  const client = new Buttplug.ButtplugClient("Teledildonics 101 Client");
   const fconnector = new ButtplugClientForwarderBrowserWebsocketPasswordConnector("wss://" + window.location.hostname + "/forwarder");
   const forwarder = new Buttplug.ButtplugClientForwarder("Forwarder connector", fconnector);
   await forwarder.Connect();
   const container = document.getElementById("local-device-list");
-  
-  client.addListener('deviceadded', async (device) => {
-    console.log(`${device.Name} connected!`);
-    const device_div = document.createElement("div");
-    const device_title = document.createElement("h2");
-    device_title.innerHTML = device.Name;
-    device_div.appendChild(device_title);
-    device_div.id = `device-${device.Index}`;
-    const device_share_checkbox = document.createElement("input");
-    device_share_checkbox.type = "checkbox";
-    const device_share_checkbox_label = document.createElement("label");
-    device_share_checkbox_label.for = device_share_checkbox;
-    device_share_checkbox_label.innerHTML = "Share Control";
-    device_div.appendChild(device_share_checkbox);
-    device_div.appendChild(device_share_checkbox_label);
-    
-    device_share_checkbox.addEventListener("click", (ev) => {
-      if (device_share_checkbox.checked) {
-        forwarder.AddDevice(device).then(() => console.log("Device shared"));
-      } else {
-        forwarder.RemoveDevice(device).then(() => console.log("Device unshared"));
-      }
-    });
-    container.appendChild(device_div);
-    
-    if (device.AllowedMessages.includes("VibrateCmd")) {
-      create_vibration_controller(device_div, device);
-    }
-    
-    if (device.AllowedMessages.includes("RotateCmd")) {
-      create_rotation_controller(device_div, device);
-    }
-    
-    if (device.AllowedMessages.includes("LinearCmd")) {
-      create_linear_controller(device_div, device);
-    }
-  });
-  
-  client.addListener('deviceremoved', (device) => {
-    const device_div = document.getElementById(`device-${device.Index}`);
-    container.removeChild(device_div);
-  });
-  
   const connector = new Buttplug.ButtplugEmbeddedClientConnector();
-  await client.Connect(connector);
-  console.log("Connected!");
+
+  const button = document.getElementById("buttplug-local-button");
+  button.addEventListener("click", async () => {
+    await client.StartScanning();
+  })
+
+  setup_client(client, connector, container);
 }
 
-const startLocalScan = async function() {
-  await client.StartScanning();
-}
+///////////////////////////////////////
+// Remote Connector
+///////////////////////////////////////
 
 class ButtplugBrowserWebsocketClientPasswordConnector extends Buttplug.ButtplugBrowserWebsocketClientConnector {
   constructor(host) {
@@ -173,7 +204,7 @@ class ButtplugBrowserWebsocketClientPasswordConnector extends Buttplug.ButtplugB
       let res;
       let rej;
       const p = new Promise((rs, rj) => { res = rs; rej = rj; });
-      const msgHandler = (ev) => { 
+      const msgHandler = (ev) => {
         if (ev.data === "ok") {
           console.log("Got correct password return");
           document.getElementById("local-control").style.display = "block";
@@ -198,40 +229,19 @@ class ButtplugBrowserWebsocketClientPasswordConnector extends Buttplug.ButtplugB
 }
 
 // Start Scanning Button Click Event Handler
-const startRemoteConnection = async function() {
+const startRemoteConnection = async function () {
   // Global Setup
-  const client = new Buttplug.ButtplugClient("Teledildonics 101 Client"); 
+  const client = new Buttplug.ButtplugClient("Teledildonics 101 Client");
   const container = document.getElementById("remote-device-list");
-  
-  client.addListener('deviceadded', async (device) => {
-    console.log(`${device.Name} connected!`);
-    const device_div = document.createElement("div");
-    const device_title = document.createElement("h2");
-    device_title.innerHTML = device.Name;
-    device_div.appendChild(device_title);
-    device_div.id = `device-${device.Index}`;
-    container.appendChild(device_div);
-    
-    if (device.AllowedMessages.includes("VibrateCmd")) {
-      create_vibration_controller(device_div, device);
-    }
-    
-    if (device.AllowedMessages.includes("RotateCmd")) {
-      create_rotation_controller(device_div, device);
-    }
-    
-    if (device.AllowedMessages.includes("LinearCmd")) {
-      create_linear_controller(device_div, device);
-    }
-  });
-  
-  client.addListener('deviceremoved', (device) => {
-    const device_div = document.getElementById(`device-${device.Index}`);
-    container.removeChild(device_div);
-  });
-  
   const domain = document.getElementById("remote-domain");
   const connector = new ButtplugBrowserWebsocketClientPasswordConnector("wss://" + domain.value + "/");
-  await client.Connect(connector);
-  console.log("Connected to remote domain!");
+
+  client.addListener("disconnect", () => {
+    document.getElementById("remote-connect").style.display = "block";
+    document.getElementById("remote-disconnect").style.display = "none";
+  });
+
+  setup_client(client, connector, container);
+  document.getElementById("remote-connect").style.display = "none";
+  document.getElementById("remote-disconnect").style.display = "block";
 }
