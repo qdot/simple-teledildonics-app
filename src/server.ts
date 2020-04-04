@@ -8,8 +8,6 @@ import express from "express";
 import expressWs from "express-ws";
 
 const app = expressWs(express()).app;
-// make all the files in 'public' available
-// https://expressjs.com/en/starter/static-files.html
 app.use(express.static(__dirname + "/app"));
 
 const listener = app.listen(process.env.PORT, () => {
@@ -39,6 +37,8 @@ export class ButtplugServerForwardedNodeWebsocketConnector extends EventEmitter 
   }
 
   public SendMessage = (msg: ButtplugMessage): Promise<void> => {
+    console.log("Sending via websocket");
+    console.log("[" + msg.toJSON() + "]");
     this.wsClientClosure("[" + msg.toJSON() + "]");
     return Promise.resolve();
   }
@@ -51,10 +51,6 @@ export class ButtplugServerForwardedNodeWebsocketConnector extends EventEmitter 
    * @param host Host address to listen on (defaults to localhost)
    */
   public Listen = (): Promise<void> => {
-    /*
-    this.httpServer = http.createServer().listen(this._port, this._host);
-    this.wsServer = new Websocket.Server({ server: this.httpServer });
-    */
     this.InitServer();
     return Promise.resolve();
   }
@@ -85,9 +81,10 @@ export class ButtplugServerForwardedNodeWebsocketConnector extends EventEmitter 
   /**
    * Used to set up server after Websocket connection created.
    */
-  private InitServer = () => {
+  private InitServer = () => {    
     app.ws('/forwarder', (client, req) => {
       console.log("Got client connection for forwarder");
+      let password_sent = false;
       this.wsClientClosure = (msg: string) => client.send(msg);
       client.on("error", (err) => {
         console.log(`Error in websocket connection: ${err.message}`);
@@ -95,6 +92,20 @@ export class ButtplugServerForwardedNodeWebsocketConnector extends EventEmitter 
       });
       client.on("message", async (message) => {
         console.log(message);
+        // Expect the password to be a plaintext string. We'll depend 
+        // on SSL for the encryption. Security? :(
+        if (!password_sent) {
+          if (message === process.env.LOCAL_PASSWORD) {
+            console.log("Client gave correct password.");
+            password_sent = true;
+            client.send("ok");
+          } else {
+            console.log("Client gave invalid local password, disconnecting.");
+            client.close();
+          }
+          // Bail before we start parsing JSON
+          return;
+        }
         const msg = FromJSON(message);
         for (const m of msg) {
           console.log(m);
@@ -121,7 +132,7 @@ export class ButtplugExpressWebsocketServer extends ButtplugServer {
    * @param port Network port to listen on (defaults to 12345)
    * @param host Host address to listen on (defaults to localhost)
    */
-  public StartInsecureServer = (port: number = 12345, host: string = "localhost") => {
+  public StartInsecureServer = () => {
     this.InitServer();
   }
 
@@ -138,14 +149,34 @@ export class ButtplugExpressWebsocketServer extends ButtplugServer {
   private InitServer = () => {
     const bs: ButtplugServer = this;
     app.ws('/', (client, req) => {
+      let password_sent = false;
       client.on("error", (err) => {
         console.log(`Error in websocket connection: ${err.message}`);
         client.terminate();
       });
       client.on("message", async (message) => {
+        console.log(message);
+        // Expect the password to be a plaintext string. We'll depend 
+        // on SSL for the encryption. Security? :(
+        if (!password_sent) {
+          if (message === process.env.REMOTE_PASSWORD) {
+            console.log("Remote client gave correct password.");
+            password_sent = true;
+            client.send("ok");
+          } else {
+            console.log("Remote client gave invalid password, disconnecting.");
+            client.close();
+          }
+          // Bail before we start parsing JSON
+          return;
+        }
         const msg = FromJSON(message);
+        console.log("Sending message");
         for (const m of msg) {
+          console.log("Sending message to internal buttplug server instance:");
+          console.log(m);
           const outgoing = await bs.SendMessage(m);
+          console.log(outgoing);
           // Make sure our message is packed in an array, as the buttplug spec
           // requires.
           client.send("[" + outgoing.toJSON() + "]");
@@ -155,6 +186,8 @@ export class ButtplugExpressWebsocketServer extends ButtplugServer {
       bs.on("message", function outgoing(message) {
         // Make sure our message is packed in an array, as the buttplug spec
         // requires.
+        console.log("incoming");
+        console.log(message);
         client.send("[" + message.toJSON() + "]");
       });
     });
@@ -170,7 +203,7 @@ async function main(): Promise<void> {
     const fdm = new ForwardedDeviceManager(undefined, connector);
     server.AddDeviceManager(fdm);
     console.log("Starting server...");
-    server.StartInsecureServer(12345, "localhost");
+    server.StartInsecureServer();
 }
 
 main().then(() => console.log("Server Started"));

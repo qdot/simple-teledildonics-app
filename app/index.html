@@ -2,23 +2,57 @@
 <html lang="en">
   <head>
     <title>Simple buttplug-js Toy Control App</title>
-    <meta charset="utf-8">
-    <meta http-equiv="X-UA-Compatible" content="IE=edge">
-    <meta name="viewport" content="width=device-width, initial-scale=1">
-    <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate" />
+    <meta charset="utf-8" />
+    <meta http-equiv="X-UA-Compatible" content="IE=edge" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta
+      http-equiv="Cache-Control"
+      content="no-cache, no-store, must-revalidate"
+    />
     <meta http-equiv="Pragma" content="no-cache" />
     <meta http-equiv="Expires" content="0" />
-    <script src="https://cdn.jsdelivr.net/npm/buttplug@0.13.0/dist/web/buttplug.min.js" defer></script>
+    <script src="https://cdn.jsdelivr.net/npm/buttplug@0.13.1/dist/web/buttplug.min.js" defer></script>
 
     <!-- import the webpage's javascript file -->
     <script src="/script.js" defer></script>
   </head>
   <body>
     <h1>Simple Teledildonics App</h1>
-    <button id="buttplug-local-button" onclick="startLocalConnection();">
-      Start Scanning
-    </button>
-    <div id="device-list">
+    <div>
+      <div>
+        <h2>
+          Local
+        </h2>
+        <div id="local-ident">
+          Local Domain Password: <input type="password" id="local-password" />
+          <button id="buttplug-local-connect" onclick="startLocalConnection();">
+            Connect
+          </button>
+        </div>
+        <div id="local-control" style="display:none;">
+          <button id="buttplug-local-button" onclick="startLocalScan();">
+            Start Scanning
+          </button>
+          <div id="local-device-list"></div>
+        </div>
+      </div>
+    </div>
+    <div>
+      <div>
+        <h2>
+          Remote
+        </h2>
+        <div>Remote Domain: <input type="text" id="remote-domain" /></div>
+        <div>
+          Remote Domain Password: <input type="password" id="remote-password" />
+        </div>
+        <div>
+          <button id="remote-connect" onclick="startRemoteConnection();">
+            Connect to remote instance
+          </button>
+        </div>
+        <div id="remote-device-list"></div>
+      </div>
     </div>
   </body>
 </html>
