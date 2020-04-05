@@ -49,14 +49,14 @@ controller, then hit "Start scanning", for them to be found.
 If you want to share your own toys, you will first need your own instance of the
 app. You should do this by "remixing" the project on glitch.com.
 
-https://glitch.com/edit/#!/qdot-simple-teledildonics-app
+[https://glitch.com/edit/#!/qdot-simple-teledildonics-app](https://glitch.com/edit/#!/qdot-simple-teledildonics-app)
 
 Once this is done:
 
 - In the glitch editor, edit the .env file to add a local and remote password.
 - Go to the app website. For instance, with the app above, that would be
-  https://qdot-simple-teledildonics-app.glitch.me. The domain name will be
-  different for your remixed version.
+  (https://qdot-simple-teledildonics-app.glitch.me)[https://qdot-simple-teledildonics-app.glitch.me].
+  The domain name will be different for your remixed version.
 - Enter the local password, and hit the Connect button.
 - Hit "Start Scanning", and the WebBluetooth scan dialog should come up. Once it
   finds your toy, hit "Connect"
