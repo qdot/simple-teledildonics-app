@@ -33,6 +33,7 @@
         <p>If you are seeing this message with Chrome, make sure you are accessing the site from either localhost or a secure context (https://), or if you are on linux, go to chrome://flags and enable Experimental Web Platform Features.</p>
         <p><a href="https://intiface.com/desktop">Intiface Desktop</a> support for non-WebBluetooth browsers will most likely not happen, as this is just a demo app and I'm lazy. Remote control should work on all browsers though!</p>
       </div>
+      <div id="local-error" style="color:#f00; display:none;"></div>
       <div id="local-ident">
         Local Domain Password: <input type="password" id="local-password" />
         <button id="buttplug-local-connect" onclick="startLocalConnection();">
@@ -53,7 +54,8 @@
       <h2>
         Remote - Use this to control toys others have shared
       </h2>
-      <div id="remote-connect-div">
+      <div id="remote-error" style="color:#f00; display:none;"></div>
+      <div id="remote-ident">
         <div>
           Remote Domain: <input type="text" id="remote-domain" />
         </div>

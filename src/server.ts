@@ -8,7 +8,9 @@ import expressWs from "express-ws";
 
 const app = expressWs(express()).app;
 app.use(express.static(__dirname + "/app"));
+
 let forwarder_connected = false;
+let remote_connected = false;
 
 const listener = app.listen(process.env.PORT, () => {
  console.log("Your app is listening on port " + (listener.address()! as Websocket.AddressInfo).port);
@@ -82,6 +84,11 @@ export class ButtplugServerForwardedNodeWebsocketConnector extends EventEmitter 
   private InitServer = () => {
     app.ws('/forwarder', (client, req) => {
       console.log("Got client connection for forwarder");
+      if (forwarder_connected) {
+        console.log("Someone tried to connect while we already have a connection. Connection closed.");
+        client.close();
+        return;
+      }
       let password_sent = false;
       this.wsClientClosure = (msg: string) => client.send(msg);
       client.on("error", (err) => {
@@ -151,11 +158,25 @@ export class ButtplugExpressWebsocketServer extends ButtplugServer {
   private InitServer = () => {
     const bs: ButtplugServer = this;
     app.ws('/', (client, req) => {
+      if (!forwarder_connected) {
+        console.log("Remote client disconnected because local client not active.");
+        client.close();
+        return;
+      }
+      if (remote_connected) {
+        console.log("Remote client already connected, disconnecting new client.");
+        client.close();
+        return;
+      }
       let password_sent = false;
       client.on("error", (err) => {
         console.log(`Error in websocket connection: ${err.message}`);
         client.terminate();
       });
+      client.on("close", () => {
+        console.log("Remote connection closed.");
+        remote_connected = false;
+      })
       client.on("message", async (message) => {
         console.log(message);
         // Expect the password to be a plaintext string. We'll depend
@@ -192,6 +213,7 @@ export class ButtplugExpressWebsocketServer extends ButtplugServer {
         console.log(message);
         client.send("[" + message.toJSON() + "]");
       });
+      remote_connected = true;
     });
   }
 }

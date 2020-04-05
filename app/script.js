@@ -9,12 +9,15 @@ function create_vibration_controller(device_div, device) {
     Vibrate
   </h3>
   <input type="range" min="0" max="100" value="0" id="${control_id}" />
-  <label for="${control_id}">Vibration Speed</label>`;
+  <label for="${control_id}">Vibration Speed</label><br />
+  <button id="${control_id}-stop">Stop Vibration</button>`;
   device_div.appendChild(control_div);
   const slider = document.getElementById(control_id);
   slider.addEventListener("mouseup", async function (ev) {
     await device.SendVibrateCmd(slider.value / 100.0);
   });
+  const stop_button = document.getElementById(`${control_id}-stop`);
+  stop_button.addEventListener("click", async() => device.SendStopDeviceCmd());
 }
 
 function create_rotation_controller(device_div, device) {
@@ -24,12 +27,15 @@ function create_rotation_controller(device_div, device) {
     Rotate
   </h3>
   <input type="range" min="-100" max="100" value="0" id="${control_id}" />
-  <label for="${control_id}">Rotation Speed</label>`;
+  <label for="${control_id}">Rotation Speed</label><br />
+  <button id="${control_id}-stop">Stop Rotation</button>`;
   device_div.appendChild(control_div);
   const slider = document.getElementById(control_id);
   slider.addEventListener("mouseup", async function (ev) {
     await device.SendRotateCmd(Math.abs(slider.value / 100.0), slider.value < 0);
   });
+  const stop_button = document.getElementById(`${control_id}-stop`);
+  stop_button.addEventListener("click", async() => device.SendStopDeviceCmd());
 }
 
 function create_linear_controller(device_div, device) {
@@ -113,6 +119,27 @@ function create_device_controls_div(container, device, can_share = false, forwar
   }
 }
 
+function set_local_error(msg) {
+  const error = document.getElementById("local-error");
+  error.style.display = "block";
+  error.innerHTML = msg;
+}
+
+function reset_local_error() {
+  const error = document.getElementById("local-error");
+  error.style.display = "none";
+}
+
+function set_remote_error(msg) {
+  const error = document.getElementById("remote-error");
+  error.style.display = "block";
+  error.innerHTML = msg;
+}
+
+function reset_remote_error() {
+  const error = document.getElementById("remote-error");
+  error.style.display = "none";
+}
 ///////////////////////////////////////
 // Generic Connector Setup
 ///////////////////////////////////////
@@ -149,18 +176,23 @@ class ButtplugClientForwarderBrowserWebsocketPasswordConnector extends Buttplug.
       let res;
       let rej;
       const p = new Promise((rs, rj) => { res = rs; rej = rj; });
+      function throwConnectError() {
+        set_local_error("Incorrect password, or connection already established by another client. Please try again.");
+      }
       const msgHandler = (ev) => {
         if (ev.data === "ok") {
           console.log("Got correct password return");
           document.getElementById("local-control").style.display = "block";
           document.getElementById("local-ident").style.display = "none";
+          this._ws.removeEventListener("close", throwConnectError);
+          this._ws.addEventListener("close", () => { console.log("socket closed"); });
           res();
           return;
         }
         console.log("Got failed password return");
         rej();
       };
-      this._ws.addEventListener("close", () => { console.log("socket closed"); });
+      this._ws.addEventListener("close", throwConnectError);
       this._ws.addEventListener("message", msgHandler);
       this._ws.send(document.getElementById("local-password").value);
       console.log("Waiting for password return");
@@ -175,6 +207,7 @@ class ButtplugClientForwarderBrowserWebsocketPasswordConnector extends Buttplug.
 
 // Start Scanning Button Click Event Handler
 const startLocalConnection = async function () {
+  reset_local_error();
   const client = new Buttplug.ButtplugClient("Teledildonics 101 Client");
   const fconnector = new ButtplugClientForwarderBrowserWebsocketPasswordConnector("wss://" + window.location.hostname + "/forwarder");
   const forwarder = new Buttplug.ButtplugClientForwarder("Forwarder connector", fconnector);
@@ -204,18 +237,22 @@ class ButtplugBrowserWebsocketClientPasswordConnector extends Buttplug.ButtplugB
       let res;
       let rej;
       const p = new Promise((rs, rj) => { res = rs; rej = rj; });
+      function throwConnectError() {
+        set_remote_error("Incorrect password, local side not ready, or remote connection already established by another client. Please try again.");
+      }
       const msgHandler = (ev) => {
         if (ev.data === "ok") {
           console.log("Got correct password return");
-          document.getElementById("local-control").style.display = "block";
-          document.getElementById("local-ident").style.display = "none";
+          document.getElementById("remote-ident").style.display = "none";
+          this._ws.removeEventListener("close", throwConnectError);
+          this._ws.addEventListener("close", () => { console.log("socket closed"); });
           res();
           return;
         }
         console.log("Got failed password return");
         rej();
       };
-      this._ws.addEventListener("close", () => { console.log("socket closed"); });
+      this._ws.addEventListener("close", throwConnectError);
       this._ws.addEventListener("message", msgHandler);
       this._ws.send(document.getElementById("remote-password").value);
       console.log("Waiting for password return");
@@ -230,7 +267,7 @@ class ButtplugBrowserWebsocketClientPasswordConnector extends Buttplug.ButtplugB
 
 // Start Scanning Button Click Event Handler
 const startRemoteConnection = async function () {
-  // Global Setup
+  reset_remote_error();
   const client = new Buttplug.ButtplugClient("Teledildonics 101 Client");
   const container = document.getElementById("remote-device-list");
   const domain = document.getElementById("remote-domain");
