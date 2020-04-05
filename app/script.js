@@ -245,3 +245,11 @@ const startRemoteConnection = async function () {
   document.getElementById("remote-connect").style.display = "none";
   document.getElementById("remote-disconnect").style.display = "block";
 }
+
+if (navigator.bluetooth === undefined) {
+  document.getElementById("local-no-bluetooth").style.display = "block";
+  document.getElementById("local-ident").style.display = "none";
+  document.getElementById("local-control").style.display = "none";
+} else {
+  document.getElementById("local-no-bluetooth").style.display = "none";
+}
