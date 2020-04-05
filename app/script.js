@@ -12,7 +12,7 @@ function create_vibration_controller(device_div, device) {
   <label for="${control_id}">Vibration Speed</label>`;
   device_div.appendChild(control_div);
   const slider = document.getElementById(control_id);
-  slider.addEventListener("input", async function (ev) {
+  slider.addEventListener("mouseup", async function (ev) {
     await device.SendVibrateCmd(slider.value / 100.0);
   });
 }
@@ -27,7 +27,7 @@ function create_rotation_controller(device_div, device) {
   <label for="${control_id}">Rotation Speed</label>`;
   device_div.appendChild(control_div);
   const slider = document.getElementById(control_id);
-  slider.addEventListener("input", async function (ev) {
+  slider.addEventListener("mouseup", async function (ev) {
     await device.SendRotateCmd(Math.abs(slider.value / 100.0), slider.value < 0);
   });
 }
@@ -67,12 +67,12 @@ function create_linear_controller(device_div, device) {
     }
     setTimeout(() => run_oscillate(!goto_max), duration_slider.value)
   };
-  checkbox.addEventListener("click", () => {
+  checkbox.addEventListener("mouseup", () => {
     if (checkbox.checked) run_oscillate(true);
   });
 }
 
-function create_device_controls_div(container, device, can_share = false) {
+function create_device_controls_div(container, device, can_share = false, forwarder = undefined) {
   console.log(`${device.Name} connected!`);
   const device_div = document.createElement("div");
   const device_title = document.createElement("h2");
@@ -117,9 +117,9 @@ function create_device_controls_div(container, device, can_share = false) {
 // Generic Connector Setup
 ///////////////////////////////////////
 
-function setup_client(client, connector, container) {
+async function setup_client(client, connector, container, can_share = false, forwarder = undefined) {
   client.addListener('deviceadded', async (device) => {
-    create_device_controls_div(container, device, true);
+    create_device_controls_div(container, device, can_share, forwarder);
   });
 
   client.addListener('deviceremoved', (device) => {
@@ -187,7 +187,7 @@ const startLocalConnection = async function () {
     await client.StartScanning();
   })
 
-  setup_client(client, connector, container);
+  await setup_client(client, connector, container, true, forwarder);
 }
 
 ///////////////////////////////////////
@@ -241,7 +241,7 @@ const startRemoteConnection = async function () {
     document.getElementById("remote-disconnect").style.display = "none";
   });
 
-  setup_client(client, connector, container);
+  await setup_client(client, connector, container);
   document.getElementById("remote-connect").style.display = "none";
   document.getElementById("remote-disconnect").style.display = "block";
 }

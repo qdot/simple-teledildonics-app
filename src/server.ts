@@ -1,5 +1,4 @@
 import { ButtplugLogger, ButtplugServerForwardedConnector, ForwardedDeviceManager, FromJSON, ButtplugMessage, ButtplugLogLevel, ButtplugServer } from "buttplug";
-import { ButtplugNodeWebsocketServer } from "buttplug-node-websockets";
 import Websocket from "ws";
 import * as http from "http";
 import { promisify } from "util";
@@ -9,6 +8,7 @@ import expressWs from "express-ws";
 
 const app = expressWs(express()).app;
 app.use(express.static(__dirname + "/app"));
+let forwarder_connected = false;
 
 const listener = app.listen(process.env.PORT, () => {
  console.log("Your app is listening on port " + (listener.address()! as Websocket.AddressInfo).port);
@@ -37,8 +37,6 @@ export class ButtplugServerForwardedNodeWebsocketConnector extends EventEmitter 
   }
 
   public SendMessage = (msg: ButtplugMessage): Promise<void> => {
-    console.log("Sending via websocket");
-    console.log("[" + msg.toJSON() + "]");
     this.wsClientClosure("[" + msg.toJSON() + "]");
     return Promise.resolve();
   }
@@ -81,7 +79,7 @@ export class ButtplugServerForwardedNodeWebsocketConnector extends EventEmitter 
   /**
    * Used to set up server after Websocket connection created.
    */
-  private InitServer = () => {    
+  private InitServer = () => {
     app.ws('/forwarder', (client, req) => {
       console.log("Got client connection for forwarder");
       let password_sent = false;
@@ -90,9 +88,12 @@ export class ButtplugServerForwardedNodeWebsocketConnector extends EventEmitter 
         console.log(`Error in websocket connection: ${err.message}`);
         client.terminate();
       });
+      client.on("close", () => {
+        forwarder_connected = false;
+      })
       client.on("message", async (message) => {
         console.log(message);
-        // Expect the password to be a plaintext string. We'll depend 
+        // Expect the password to be a plaintext string. We'll depend
         // on SSL for the encryption. Security? :(
         if (!password_sent) {
           if (message === process.env.LOCAL_PASSWORD) {
@@ -104,6 +105,7 @@ export class ButtplugServerForwardedNodeWebsocketConnector extends EventEmitter 
             client.close();
           }
           // Bail before we start parsing JSON
+          forwarder_connected = true;
           return;
         }
         const msg = FromJSON(message);
@@ -156,7 +158,7 @@ export class ButtplugExpressWebsocketServer extends ButtplugServer {
       });
       client.on("message", async (message) => {
         console.log(message);
-        // Expect the password to be a plaintext string. We'll depend 
+        // Expect the password to be a plaintext string. We'll depend
         // on SSL for the encryption. Security? :(
         if (!password_sent) {
           if (message === process.env.REMOTE_PASSWORD) {
