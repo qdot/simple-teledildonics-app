@@ -55,6 +55,10 @@ function run_app() {
     connector = new ButtplugServerForwardedNodeWebsocketConnector(client);
     console.log("Starting forwarder listener...");
     connector.Listen();
+    server = new ButtplugExpressWebsocketServer("Remote Server", 0);
+    const fdm = new ForwardedDeviceManager(undefined, connector);
+    server.AddDeviceManager(fdm);
+    console.log("Starting server...");
   });
 
   /**
@@ -152,31 +156,16 @@ function run_app() {
       client.close();
       return;
     }
-    server = new ButtplugExpressWebsocketServer("Remote Server", 0, client);
-    const fdm = new ForwardedDeviceManager(undefined, connector);
-    server.AddDeviceManager(fdm);
-    console.log("Starting server...");
-    server.StartInsecureServer();
+    server.InitServer(client);
   });
 
   class ButtplugExpressWebsocketServer extends ButtplugServer {
-    public constructor(name: string, maxPingTime: number = 0, private wsClient: any) {
+    public constructor(name: string, maxPingTime: number = 0) {
       super(name, maxPingTime);
     }
 
     public get IsRunning(): boolean {
       return true;
-    }
-
-    /**
-     * Starts an insecure (non-ssl) instance of the server. This server will not
-     * be accessible from clients/applications running on https instances.
-     *
-     * @param port Network port to listen on (defaults to 12345)
-     * @param host Host address to listen on (defaults to localhost)
-     */
-    public StartInsecureServer = () => {
-      this.InitServer();
     }
 
     /**
@@ -189,21 +178,21 @@ function run_app() {
     /**
      * Used to set up server after Websocket connection created.
      */
-    private InitServer = () => {
+    public InitServer = (wsClient: any) => {
       const bs: ButtplugServer = this;
         let password_sent = false;
-        this.wsClient.on("error", (err) => {
+        wsClient.on("error", (err) => {
           console.log(`Error in websocket connection: ${err.message}`);
-          this.wsClient.terminate();
+          wsClient.terminate();
         });
-        this.wsClient.on("close", () => {
+        wsClient.on("close", () => {
           console.log("Remote connection closed.");
           remote_connected = false;
         });
         local_disconnector.addListener("disconnected", () => {
-          this.wsClient.close()
+          wsClient.close()
         });
-        this.wsClient.on("message", async (message) => {
+        wsClient.on("message", async (message) => {
           console.log(message);
           // Expect the password to be a plaintext string. We'll depend
           // on SSL for the encryption. Security? :(
@@ -211,10 +200,10 @@ function run_app() {
             if (message === process.env.REMOTE_PASSWORD) {
               console.log("Remote client gave correct password.");
               password_sent = true;
-              this.wsClient.send("ok");
+              wsClient.send("ok");
             } else {
               console.log("Remote client gave invalid password, disconnecting.");
-              this.wsClient.close();
+              wsClient.close();
             }
             // Bail before we start parsing JSON
             return;
@@ -228,7 +217,7 @@ function run_app() {
             console.log(outgoing);
             // Make sure our message is packed in an array, as the buttplug spec
             // requires.
-            this.wsClient.send("[" + outgoing.toJSON() + "]");
+            wsClient.send("[" + outgoing.toJSON() + "]");
           }
         });
 
@@ -237,7 +226,7 @@ function run_app() {
           // requires.
           console.log("incoming");
           console.log(message);
-          this.wsClient.send("[" + message.toJSON() + "]");
+          wsClient.send("[" + message.toJSON() + "]");
         });
         remote_connected = true;
     }
