@@ -81,7 +81,7 @@
     "@types/express-serve-static-core" "*"
     "@types/mime" "*"
 
-"@types/ws@*", "@types/ws@^7.2.3":
+"@types/ws@*":
   version "7.2.3"
   resolved "https://registry.yarnpkg.com/@types/ws/-/ws-7.2.3.tgz#a3add56077ac6cc9396b9502c7252a1635922032"
   integrity sha512-VT/GK7nvDA7lfHy40G3LKM+ICqmdIsBLBHGXcWD97MtqQEjNMX+7Gudo8YGpaSlYdTX7IFThhCE8Jx09HegymQ==
@@ -132,15 +132,7 @@ body-parser@1.19.0:
     raw-body "2.4.0"
     type-is "~1.6.17"
 
-buttplug-node-websockets@0.13.2:
-  version "0.13.2"
-  resolved "https://registry.yarnpkg.com/buttplug-node-websockets/-/buttplug-node-websockets-0.13.2.tgz#441986fb3bff8987bb81e718d12ddbd691cc4ec8"
-  integrity sha512-0qPbNR23NfPJUSozyjcvw9Izzt02kXNTKhWFPS49lEYT5AR81yZsw2ncm/jreYYclJElAFjBPaMJQdL3/sIe6g==
-  dependencies:
-    buttplug "^0.13.1"
-    ws "^7.2.3"
-
-buttplug@0.13.1, buttplug@^0.13.1:
+buttplug@0.13.1:
   version "0.13.1"
   resolved "https://registry.yarnpkg.com/buttplug/-/buttplug-0.13.1.tgz#7bd51149ea6deadde7e847fec9338b4a4ca801bd"
   integrity sha512-nLw0OQskrNbuZGRsYH+YmCNjn/dxHfPoCMP4vlKHsGoWKNAgc4GzH99KVLDhayA7ogRINzzTbQIL9GUGSi2jAw==
@@ -540,11 +532,6 @@ ws@^5.2.0:
   integrity sha512-jaHFD6PFv6UgoIVda6qZllptQsMlDEJkTQcybzzXDYM1XO9Y8em691FGMPmM46WGyLU4z9KMgQN+qrux/nhlHA==
   dependencies:
     async-limiter "~1.0.0"
-
-ws@^7.2.3:
-  version "7.2.3"
-  resolved "https://registry.yarnpkg.com/ws/-/ws-7.2.3.tgz#a5411e1fb04d5ed0efee76d26d5c46d830c39b46"
-  integrity sha512-HTDl9G9hbkNDk98naoR/cHDws7+EyYMOdL1BmjsZXRUjf7d+MficC4B7HLUPlSiho0vg+CWKrGIt/VJBd1xunQ==
 
 yarn@^1.22.4:
   version "1.22.4"

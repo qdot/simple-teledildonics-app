@@ -274,12 +274,13 @@ const startRemoteConnection = async function () {
   const connector = new ButtplugBrowserWebsocketClientPasswordConnector("wss://" + domain.value + "/");
 
   client.addListener("disconnect", () => {
-    document.getElementById("remote-connect").style.display = "block";
+    set_remote_error("Remote side disconnected. Please try connecting again.");
+    document.getElementById("remote-ident").style.display = "block";
     document.getElementById("remote-disconnect").style.display = "none";
   });
 
   await setup_client(client, connector, container);
-  document.getElementById("remote-connect").style.display = "none";
+  document.getElementById("remote-ident").style.display = "none";
   document.getElementById("remote-disconnect").style.display = "block";
 }
 
