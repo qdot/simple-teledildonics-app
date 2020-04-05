@@ -209,7 +209,7 @@ class ButtplugClientForwarderBrowserWebsocketPasswordConnector extends Buttplug.
 const startLocalConnection = async function () {
   reset_local_error();
   const client = new Buttplug.ButtplugClient("Teledildonics 101 Client");
-  const fconnector = new ButtplugClientForwarderBrowserWebsocketPasswordConnector("wss://" + window.location.hostname + "/forwarder");
+  const fconnector = new ButtplugClientForwarderBrowserWebsocketPasswordConnector("wss://" + window.location.hostname + (window.location.port ? ':' + window.location.port : '') + "/forwarder");
   const forwarder = new Buttplug.ButtplugClientForwarder("Forwarder connector", fconnector);
   await forwarder.Connect();
   const container = document.getElementById("local-device-list");
@@ -230,10 +230,7 @@ const startLocalConnection = async function () {
 class ButtplugBrowserWebsocketClientPasswordConnector extends Buttplug.ButtplugBrowserWebsocketClientConnector {
   constructor(host) {
     super(host);
-    console.log("creating connector?!");
     this.Initialize = async () => {
-      console.log("Connecting using derived class?!");
-      console.log(this);
       let res;
       let rej;
       const p = new Promise((rs, rj) => { res = rs; rej = rj; });
@@ -242,7 +239,6 @@ class ButtplugBrowserWebsocketClientPasswordConnector extends Buttplug.ButtplugB
       }
       const msgHandler = (ev) => {
         if (ev.data === "ok") {
-          console.log("Got correct password return");
           document.getElementById("remote-ident").style.display = "none";
           this._ws.removeEventListener("close", throwConnectError);
           this._ws.addEventListener("close", () => { console.log("socket closed"); });
@@ -283,6 +279,9 @@ const startRemoteConnection = async function () {
   document.getElementById("remote-ident").style.display = "none";
   document.getElementById("remote-disconnect").style.display = "block";
 }
+
+// Default to the local domain as the remote.
+document.getElementById("remote-domain").value = window.location.hostname + (window.location.port ? ':' + window.location.port : "");
 
 if (navigator.bluetooth === undefined) {
   document.getElementById("local-no-bluetooth").style.display = "block";

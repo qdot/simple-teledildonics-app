@@ -42,6 +42,21 @@ if (process.env.LOCAL_PASSWORD === "" || process.env.LOCAL_PASSWORD === undefine
 function run_app() {
   app.use(express.static(__dirname + "/app"));
 
+  let server: ButtplugExpressWebsocketServer;
+  let connector: ButtplugServerForwardedNodeWebsocketConnector;
+
+  app.ws('/forwarder', (client, req) => {
+    console.log("Got client connection for forwarder");
+    if (forwarder_connected) {
+      console.log("Someone tried to connect while we already have a connection. Connection closed.");
+      client.close();
+      return;
+    }
+    connector = new ButtplugServerForwardedNodeWebsocketConnector(client);
+    console.log("Starting forwarder listener...");
+    connector.Listen();
+  });
+
   /**
    * Derives from the base ButtplugServer class, adds capabilities to the server
    * for listening on and communicating with websockets in a native node
@@ -50,7 +65,7 @@ function run_app() {
   class ButtplugServerForwardedNodeWebsocketConnector extends EventEmitter implements ButtplugServerForwardedConnector {
     private wsClientClosure: (msg: string) => void;
 
-    public constructor(private _port: number = 13345, private _host: string = "localhost") {
+    public constructor(private wsClient: any) {
       super();
     }
 
@@ -83,54 +98,69 @@ function run_app() {
      * Used to set up server after Websocket connection created.
      */
     private InitServer = () => {
-      app.ws('/forwarder', (client, req) => {
-        console.log("Got client connection for forwarder");
-        if (forwarder_connected) {
-          console.log("Someone tried to connect while we already have a connection. Connection closed.");
-          client.close();
-          return;
-        }
-        let password_sent = false;
-        this.wsClientClosure = (msg: string) => client.send(msg);
-        client.on("error", (err) => {
-          console.log(`Error in websocket connection: ${err.message}`);
-          client.terminate();
-        });
-        client.on("close", () => {
-          console.log("Local side disconnected");
-          forwarder_connected = false;
-          local_disconnector.emitLocalDisconnect();
-          this.emit("disconnect");
-        });
-        client.on("message", async (message) => {
-          console.log(message);
-          // Expect the password to be a plaintext string. We'll depend
-          // on SSL for the encryption. Security? :(
-          if (!password_sent) {
-            if (message === process.env.LOCAL_PASSWORD) {
-              console.log("Client gave correct password.");
-              password_sent = true;
-              client.send("ok");
-            } else {
-              console.log("Client gave invalid local password, disconnecting.");
-              client.close();
-            }
-            // Bail before we start parsing JSON
-            forwarder_connected = true;
+
+      let password_sent = false;
+      this.wsClientClosure = (msg: string) => this.wsClient.send(msg);
+      this.wsClient.on("error", (err) => {
+        console.log(`Error in websocket connection: ${err.message}`);
+        this.wsClient.terminate();
+        this.wsClient.removeAllListeners();
+      });
+      this.wsClient.on("close", () => {
+        console.log("Local side disconnected");
+        forwarder_connected = false;
+        local_disconnector.emitLocalDisconnect();
+        this.wsClient.removeAllListeners();
+        this.emit("disconnect");
+      });
+      this.wsClient.on("message", async (message) => {
+        console.log(message);
+        // Expect the password to be a plaintext string. We'll depend
+        // on SSL for the encryption. Security? :(
+        if (!password_sent) {
+          if (message === process.env.LOCAL_PASSWORD) {
+            console.log("Client gave correct password.");
+            password_sent = true;
+            this.wsClient.send("ok");
+          } else {
+            console.log("Client gave invalid local password, disconnecting.");
+            this.wsClient.close();
+            this.wsClient.removeAllListeners();
             return;
           }
-          const msg = FromJSON(message);
-          for (const m of msg) {
-            console.log(m);
-            this.emit("message", m);
-          }
-        });
+          // Bail before we start parsing JSON
+          forwarder_connected = true;
+          return;
+        }
+        const msg = FromJSON(message);
+        for (const m of msg) {
+          console.log(m);
+          this.emit("message", m);
+        }
       });
     }
   }
 
+  app.ws('/', (client, req) => {
+    if (!forwarder_connected) {
+      console.log("Remote client disconnected because local client not active.");
+      client.close();
+      return;
+    }
+    if (remote_connected) {
+      console.log("Remote client already connected, disconnecting new client.");
+      client.close();
+      return;
+    }
+    server = new ButtplugExpressWebsocketServer("Remote Server", 0, client);
+    const fdm = new ForwardedDeviceManager(undefined, connector);
+    server.AddDeviceManager(fdm);
+    console.log("Starting server...");
+    server.StartInsecureServer();
+  });
+
   class ButtplugExpressWebsocketServer extends ButtplugServer {
-    public constructor(name: string, maxPingTime: number = 0) {
+    public constructor(name: string, maxPingTime: number = 0, private wsClient: any) {
       super(name, maxPingTime);
     }
 
@@ -161,31 +191,19 @@ function run_app() {
      */
     private InitServer = () => {
       const bs: ButtplugServer = this;
-      app.ws('/', (client, req) => {
-        if (!forwarder_connected) {
-          console.log("Remote client disconnected because local client not active.");
-          client.close();
-          return;
-        }
-        if (remote_connected) {
-          console.log("Remote client already connected, disconnecting new client.");
-          client.close();
-          return;
-        }
         let password_sent = false;
-        client.on("error", (err) => {
+        this.wsClient.on("error", (err) => {
           console.log(`Error in websocket connection: ${err.message}`);
-          client.terminate();
+          this.wsClient.terminate();
         });
-        client.on("close", () => {
+        this.wsClient.on("close", () => {
           console.log("Remote connection closed.");
           remote_connected = false;
-          this.emit("disconnect");
         });
         local_disconnector.addListener("disconnected", () => {
-          client.close()
+          this.wsClient.close()
         });
-        client.on("message", async (message) => {
+        this.wsClient.on("message", async (message) => {
           console.log(message);
           // Expect the password to be a plaintext string. We'll depend
           // on SSL for the encryption. Security? :(
@@ -193,10 +211,10 @@ function run_app() {
             if (message === process.env.REMOTE_PASSWORD) {
               console.log("Remote client gave correct password.");
               password_sent = true;
-              client.send("ok");
+              this.wsClient.send("ok");
             } else {
               console.log("Remote client gave invalid password, disconnecting.");
-              client.close();
+              this.wsClient.close();
             }
             // Bail before we start parsing JSON
             return;
@@ -210,32 +228,23 @@ function run_app() {
             console.log(outgoing);
             // Make sure our message is packed in an array, as the buttplug spec
             // requires.
-            client.send("[" + outgoing.toJSON() + "]");
+            this.wsClient.send("[" + outgoing.toJSON() + "]");
           }
         });
 
-        bs.on("message", function outgoing(message) {
+        bs.on("message", (message) => {
           // Make sure our message is packed in an array, as the buttplug spec
           // requires.
           console.log("incoming");
           console.log(message);
-          client.send("[" + message.toJSON() + "]");
+          this.wsClient.send("[" + message.toJSON() + "]");
         });
         remote_connected = true;
-      });
     }
   }
 
   async function main(): Promise<void> {
     ButtplugLogger.Logger.MaximumConsoleLogLevel = ButtplugLogLevel.Debug;
-    const server = new ButtplugExpressWebsocketServer("Remote Server", 0);
-    const connector = new ButtplugServerForwardedNodeWebsocketConnector();
-    console.log("Starting forwarder listener...");
-    connector.Listen();
-    const fdm = new ForwardedDeviceManager(undefined, connector);
-    server.AddDeviceManager(fdm);
-    console.log("Starting server...");
-    server.StartInsecureServer();
   }
 
   main().then(() => console.log("Server Started"));
