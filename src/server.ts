@@ -186,10 +186,22 @@ function run_app() {
             return;
           }
           status_emitter.addListener("remote_connect", () => {
-            client.send(`{"type":"connect"}`);
+            if (status_connected) {
+              try {
+                client.send(`{"type":"connect"}`);
+              } catch (e) {
+                console.log("Cannot send status update");
+              }
+            }
           });
           status_emitter.addListener("remote_disconnect", (name) => {
-            client.send(`{"type":"disconnect"}`);
+            if (status_connected) {
+              try {
+                client.send(`{"type":"disconnect"}`);
+              } catch (e) {
+                console.log("Cannot send status update");
+              }
+            }
           });
           // Bail before we start parsing JSON
           status_connected = true;
