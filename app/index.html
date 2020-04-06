@@ -14,19 +14,18 @@
   <!-- import the webpage's javascript file -->
   <script src="/script.js" defer></script>
 </head>
+
 <body>
   <h1>Simple Teledildonics App</h1>
   <div>
-    This is a simple 1:1 sex toy control app. If you would like someone to
-    control your toys, you will need to set up your own instance of this app.
-    Please see the <a
-    href="https://github.com/qdot/simple-teledildonics-app/blob/master/README.md">app
-    instructions</a> for more info.
+    <p>This is a simple 1:1 sex toy control app. If you would like someone to control your toys, you will need to set up your own instance of this app. Please see the <a href="https://github.com/qdot/simple-teledildonics-app/blob/master/README.md">app instructions</a> for more info.</p>
   </div>
   <div>
     How to Use: <a href="https://github.com/qdot/simple-teledildonics-app/blob/master/README.md">Click here</a><br />
-    Main Glitch Project: <a href="https://glitch.com/edit/#!/qdot-simple-teledildonics-app">https://glitch.com/edit/#!/qdot-simple-teledildonics-app</a><br />
-    Github Repo: <a href="https://github.com/qdot/simple-teledildonics-app">https://github.com/qdot/simple-teledildonics-app</a><br />
+    Main Glitch Project: <a
+      href="https://glitch.com/edit/#!/qdot-simple-teledildonics-app">https://glitch.com/edit/#!/qdot-simple-teledildonics-app</a><br />
+    Github Repo: <a
+      href="https://github.com/qdot/simple-teledildonics-app">https://github.com/qdot/simple-teledildonics-app</a><br />
   </div>
   <hr />
   <div>
@@ -35,9 +34,14 @@
         Local - Use this to share your toys with others
       </h2>
       <div id="local-no-bluetooth">
-        <p>Local connection requires using <a href="https://chrome.google.com">Google Chrome</a> (or another Blink based browser, or if on iOS: <a href="https://apps.apple.com/us/app/webble/id1193531073">WebBLE</a>).</p>
-        <p>If you are seeing this message with Chrome, make sure you are accessing the site from either localhost or a secure context (https://), or if you are on linux, go to chrome://flags and enable Experimental Web Platform Features.</p>
-        <p><a href="https://intiface.com/desktop">Intiface Desktop</a> support for non-WebBluetooth browsers will most likely not happen, as this is just a demo app and I'm lazy. Remote control should work on all browsers though!</p>
+        <p>Local connection requires using <a href="https://chrome.google.com">Google Chrome</a> (or another Blink based
+          browser, or if on iOS: <a href="https://apps.apple.com/us/app/webble/id1193531073">WebBLE</a>).</p>
+        <p>If you are seeing this message with Chrome, make sure you are accessing the site from either localhost or a
+          secure context (https://), or if you are on linux, go to chrome://flags and enable Experimental Web Platform
+          Features.</p>
+        <p><a href="https://intiface.com/desktop">Intiface Desktop</a> support for non-WebBluetooth browsers will most
+          likely not happen, as this is just a demo app and I'm lazy. Remote control should work on all browsers though!
+        </p>
       </div>
       <div id="local-error" style="color:#f00; display:none;"></div>
       <div id="local-ident">
@@ -47,9 +51,14 @@
         </button>
       </div>
       <div id="local-control" style="display:none;">
-        <button id="buttplug-local-button">
-          Start Scanning
-        </button>
+        <div id="local-connection-info">
+          Remote not connected.
+        </div>
+        <div>
+          <button id="buttplug-local-button">
+            Start Scanning
+          </button>
+        </div>
         <div id="local-device-list"></div>
       </div>
     </div>
@@ -83,4 +92,5 @@
     </div>
   </div>
 </body>
+
 </html>

@@ -1,4 +1,4 @@
-import { ButtplugLogger, ButtplugServerForwardedConnector, ForwardedDeviceManager, FromJSON, ButtplugMessage, ButtplugLogLevel, ButtplugServer } from "buttplug"; 4
+import { ButtplugLogger, ButtplugServerForwardedConnector, ForwardedDeviceManager, FromJSON, ButtplugMessage, ButtplugLogLevel, ButtplugServer, RequestServerInfo } from "buttplug"; 4
 import { EventEmitter } from "events";
 import express from "express";
 import expressWs from "express-ws";
@@ -7,15 +7,25 @@ const app = expressWs(express()).app;
 
 
 let forwarder_connected = false;
+let status_connected = false;
 let remote_connected = false;
 
-class LocalDisconnector extends EventEmitter {
+class StatusEmitter extends EventEmitter {
   public emitLocalDisconnect() {
-    this.emit("disconnected");
+    this.emit("local_disconnect");
+  }
+
+  public emitRemoteConnect() {
+    console.log("Remote connected");
+    this.emit("remote_connect");
+  }
+
+  public emitRemoteDisconnect() {
+    this.emit("remote_disconnect");
   }
 };
 
-let local_disconnector = new LocalDisconnector();
+let status_emitter = new StatusEmitter();
 
 const listener = app.listen(process.env.PORT, () => {
   console.log("Your app is listening on port " + (listener.address()! as any).port);
@@ -113,7 +123,7 @@ function run_app() {
       this.wsClient.on("close", () => {
         console.log("Local side disconnected");
         forwarder_connected = false;
-        local_disconnector.emitLocalDisconnect();
+        status_emitter.emitLocalDisconnect();
         this.wsClient.removeAllListeners();
         this.emit("disconnect");
       });
@@ -144,6 +154,63 @@ function run_app() {
       });
     }
   }
+
+  class StatusHandler {
+    private password_sent = false;
+
+    public constructor(private client: any) {
+      client.on("error", (err) => {
+        console.log(`Error in websocket connection: ${err.message}`);
+        status_connected = false;
+        client.terminate();
+        client.removeAllListeners();
+      });
+      client.on("close", () => {
+        console.log("Status disconnected");
+        status_connected = false;
+        client.removeAllListeners();
+      });
+      client.on("message", async (message) => {
+        console.log(message);
+        // Expect the password to be a plaintext string. We'll depend
+        // on SSL for the encryption. Security? :(
+        if (!this.password_sent) {
+          if (message === process.env.LOCAL_PASSWORD) {
+            console.log("Client gave correct password.");
+            this.password_sent = true;
+            client.send("ok");
+          } else {
+            console.log("Client gave invalid local password, disconnecting.");
+            client.close();
+            client.removeAllListeners();
+            return;
+          }
+          status_emitter.addListener("remote_connect", () => {
+            client.send(`{"type":"connect"}`);
+          });
+          status_emitter.addListener("remote_disconnect", (name) => {
+            client.send(`{"type":"disconnect"}`);
+          });
+          // Bail before we start parsing JSON
+          status_connected = true;
+        }
+      });
+    }
+  }
+
+  app.ws("/status", (client, req) => {
+    if (!forwarder_connected) {
+      console.log("forwarder must connect before status endpoint connects.");
+      client.close();
+      return;
+    }
+    if (status_connected) {
+      console.log("Status client already connected, disconnecting new client.");
+      client.close();
+      return;
+    }
+    const handler = new StatusHandler(client);
+  });
 
   app.ws('/', (client, req) => {
     if (!forwarder_connected) {
@@ -187,9 +254,10 @@ function run_app() {
         });
         wsClient.on("close", () => {
           console.log("Remote connection closed.");
+          status_emitter.emitRemoteDisconnect();
           remote_connected = false;
         });
-        local_disconnector.addListener("disconnected", () => {
+        status_emitter.addListener("local_disconnect", () => {
           wsClient.close()
         });
         wsClient.on("message", async (message) => {
@@ -211,6 +279,9 @@ function run_app() {
           const msg = FromJSON(message);
           console.log("Sending message");
           for (const m of msg) {
+            if (m.Type === RequestServerInfo) {
+              status_emitter.emitRemoteConnect();
+            }
             console.log("Sending message to internal buttplug server instance:");
             console.log(m);
             const outgoing = await bs.SendMessage(m);

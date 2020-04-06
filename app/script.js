@@ -17,7 +17,7 @@ function create_vibration_controller(device_div, device) {
     await device.SendVibrateCmd(slider.value / 100.0);
   });
   const stop_button = document.getElementById(`${control_id}-stop`);
-  stop_button.addEventListener("click", async() => device.SendStopDeviceCmd());
+  stop_button.addEventListener("click", async () => device.SendStopDeviceCmd());
 }
 
 function create_rotation_controller(device_div, device) {
@@ -35,7 +35,7 @@ function create_rotation_controller(device_div, device) {
     await device.SendRotateCmd(Math.abs(slider.value / 100.0), slider.value < 0);
   });
   const stop_button = document.getElementById(`${control_id}-stop`);
-  stop_button.addEventListener("click", async() => device.SendStopDeviceCmd());
+  stop_button.addEventListener("click", async () => device.SendStopDeviceCmd());
 }
 
 function create_linear_controller(device_div, device) {
@@ -221,6 +221,29 @@ const startLocalConnection = async function () {
   })
 
   await setup_client(client, connector, container, true, forwarder);
+
+  // Set up the status connection
+  const status_ws = new WebSocket("ws://" + window.location.hostname + (window.location.port ? ':' + window.location.port : '') + "/status");
+  status_ws.addEventListener("open", () => {
+    status_ws.addEventListener("message", (ev) => {
+      let msg = ev.data;
+      if (msg === "ok") {
+        console.log("password accepted, status endpoint running");
+      } else {
+        const obj = JSON.parse(msg);
+        console.log(msg);
+        const coninfo = document.getElementById("local-connection-info");
+        if (obj.type === "connect") {
+          coninfo.style.color = "#0F0";
+          coninfo.innerHTML = `Remote Connection Established`;
+        } else if (obj.type === "disconnect") {
+          coninfo.style.color = "#F00";
+          coninfo.innerHTML = `Remote not connected.`;
+        }
+      }
+    });
+    status_ws.send(document.getElementById("local-password").value);
+  });
 }
 
 ///////////////////////////////////////
