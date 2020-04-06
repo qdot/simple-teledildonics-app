@@ -82,7 +82,7 @@ function create_device_controls_div(container, device, can_share = false, forwar
   console.log(`${device.Name} connected!`);
   const device_div = document.createElement("div");
   const device_title = document.createElement("h2");
-  device_title.innerHTML = device.Name;
+  device_title.innerHTML = validator.escape(device.Name);
   device_div.appendChild(device_title);
   device_div.id = `device-${device.Index}`;
 
