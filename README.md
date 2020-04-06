@@ -96,12 +96,16 @@ disconnected.
     meant as a demo is in the works, and will have Intiface Desktop
     capabilities.
 - What security is there?
-  - Not much. The password system exists solely to limit access to the app. The
-    app has 2 passwords which are stored in a plaintext file, and it is assumed
-    these passwords will be transported via SSL, so we depend on TLS for our
-    encryption. No limiters are built-in on the server side, so things like
-    command flooding are a definite possibility. Use at your own risk, and don't
-    post your app domain publicly.
+  - Not much. The password system exists solely to limit access to the
+    app. The app has 2 passwords which are stored in a plaintext file,
+    and it is assumed these passwords will be transported via SSL, so
+    we depend on TLS for our encryption. No limiters are built-in on
+    the server side, so things like command flooding are a definite
+    possibility. While some string validation is in place, the
+    Buttplug library itself could also use more escaping and
+    validators, as it currently contains very few, mostly checked via
+    JSON schema. **Use at your own risk, and don't post your app
+    domain publicly.**
 - What is needed to run this outside of glitch?
   - If you want to run this app yourself, you will need your own server, and a
     domain with SSL capabilties. The project is meant to run with SSL only,
