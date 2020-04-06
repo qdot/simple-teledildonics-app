@@ -223,7 +223,7 @@ const startLocalConnection = async function () {
   await setup_client(client, connector, container, true, forwarder);
 
   // Set up the status connection
-  const status_ws = new WebSocket("ws://" + window.location.hostname + (window.location.port ? ':' + window.location.port : '') + "/status");
+  const status_ws = new WebSocket("wss://" + window.location.hostname + (window.location.port ? ':' + window.location.port : '') + "/status");
   status_ws.addEventListener("open", () => {
     status_ws.addEventListener("message", (ev) => {
       let msg = ev.data;
