@@ -259,59 +259,59 @@ function run_app() {
      */
     public InitServer = (wsClient: any) => {
       const bs: ButtplugServer = this;
-        let password_sent = false;
-        wsClient.on("error", (err) => {
-          console.log(`Error in websocket connection: ${err.message}`);
-          wsClient.terminate();
-        });
-        wsClient.on("close", () => {
-          console.log("Remote connection closed.");
-          status_emitter.emitRemoteDisconnect();
-          remote_connected = false;
-        });
-        status_emitter.addListener("local_disconnect", () => {
-          wsClient.close()
-        });
-        wsClient.on("message", async (message) => {
-          console.log(message);
-          // Expect the password to be a plaintext string. We'll depend
-          // on SSL for the encryption. Security? :(
-          if (!password_sent) {
-            if (message === process.env.REMOTE_PASSWORD) {
-              console.log("Remote client gave correct password.");
-              password_sent = true;
-              wsClient.send("ok");
-            } else {
-              console.log("Remote client gave invalid password, disconnecting.");
-              wsClient.close();
-            }
-            // Bail before we start parsing JSON
-            return;
+      let password_sent = false;
+      wsClient.on("error", (err) => {
+        console.log(`Error in websocket connection: ${err.message}`);
+        wsClient.terminate();
+      });
+      wsClient.on("close", () => {
+        console.log("Remote connection closed.");
+        status_emitter.emitRemoteDisconnect();
+        remote_connected = false;
+      });
+      status_emitter.addListener("local_disconnect", () => {
+        wsClient.close()
+      });
+      wsClient.on("message", async (message) => {
+        console.log(message);
+        // Expect the password to be a plaintext string. We'll depend
+        // on SSL for the encryption. Security? :(
+        if (!password_sent) {
+          if (message === process.env.REMOTE_PASSWORD) {
+            console.log("Remote client gave correct password.");
+            password_sent = true;
+            wsClient.send("ok");
+          } else {
+            console.log("Remote client gave invalid password, disconnecting.");
+            wsClient.close();
           }
-          const msg = FromJSON(message);
-          console.log("Sending message");
-          for (const m of msg) {
-            if (m.Type === RequestServerInfo) {
-              status_emitter.emitRemoteConnect();
-            }
-            console.log("Sending message to internal buttplug server instance:");
-            console.log(m);
-            const outgoing = await bs.SendMessage(m);
-            console.log(outgoing);
-            // Make sure our message is packed in an array, as the buttplug spec
-            // requires.
-            wsClient.send("[" + outgoing.toJSON() + "]");
+          // Bail before we start parsing JSON
+          return;
+        }
+        const msg = FromJSON(message);
+        console.log("Sending message");
+        for (const m of msg) {
+          if (m.Type === RequestServerInfo) {
+            status_emitter.emitRemoteConnect();
           }
-        });
-
-        bs.on("message", (message) => {
+          console.log("Sending message to internal buttplug server instance:");
+          console.log(m);
+          const outgoing = await bs.SendMessage(m);
+          console.log(outgoing);
           // Make sure our message is packed in an array, as the buttplug spec
           // requires.
-          console.log("incoming");
-          console.log(message);
-          wsClient.send("[" + message.toJSON() + "]");
-        });
-        remote_connected = true;
+          wsClient.send("[" + outgoing.toJSON() + "]");
+        }
+      });
+
+      bs.on("message", (message) => {
+        // Make sure our message is packed in an array, as the buttplug spec
+        // requires.
+        console.log("incoming");
+        console.log(message);
+        wsClient.send("[" + message.toJSON() + "]");
+      });
+      remote_connected = true;
     }
   }
 
