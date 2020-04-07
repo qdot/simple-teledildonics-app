@@ -1,15 +1,91 @@
-import { ButtplugLogger, ButtplugServerForwardedConnector, ForwardedDeviceManager, FromJSON, ButtplugMessage, ButtplugLogLevel, ButtplugServer, RequestServerInfo } from "buttplug"; 4
+////////////////////////////////////////////////////////////////////////////////
+// Server Explanation
+////////////////////////////////////////////////////////////////////////////////
+
+// Welcome to the server portion of the Simple Teledildonics app.
+//
+// This server allows 1 user to share their hardware, while another user can
+// connect and control it. Multiple connections are not allowed on either end,
+// only one sharer and one controller at any time. The sharer must connect
+// before the controller.
+//
+// The server hosts 3 endpoints:
+//
+// - /
+//   - This is a dual protocol endpoint. Via HTTP, this shows the index page.
+//     Via websocket, it allows people to connect to control shared hardware.
+// - /forwarder
+//   - This is a websocket endpoint. It allows a user to share their hardware.
+// - /status
+//   - This is a websocket endpoint, used by the forwader user to get status
+//     about remote connections.
+//
+// The expected execution flow is as follows:
+//
+// - A user connects to the "local" (sharer) side and chooses toys to share.
+// - Another user then connects to the "Remote" (controller) side to control
+//   the shared toys.
+// - If the "local" user disconnects, the "remote" will be disconnected.
+// - Similarly, if no "local" is connected, no "remote" can connect.
+//
+// Security is in the form of passwords which are set in the .env file, which
+// Glitch assigns to process.env. There is a separate password for local users
+// and remote users, so that only those that know the password can use the
+// application. The idea is that each person who wants to use the application
+// should set up their own version of it, freeing us from having to deal with
+// things like user databases. If the passwords are not set, the server will not
+// run and will instead warn the user to set the passwords.
+//
+// The server is written in Typescript because it's just what I'm used to. It's
+// probably doable in JS, but I kinda ran out of energy and I work much faster
+// in Typescript. This doesn't use much in the way to Typescript features
+// though, so hopefully it'll be fairly understandable.
+
+////////////////////////////////////////////////////////////////////////////////
+// App Setup
+////////////////////////////////////////////////////////////////////////////////
+
+// Everything we'll need from the Buttplug library, which is a lot.
+import { ButtplugLogger, ButtplugServerForwardedConnector, ForwardedDeviceManager,
+         FromJSON, ButtplugMessage, ButtplugLogLevel, ButtplugServer,
+         RequestServerInfo } from "buttplug"; 4
+
+// We'll need to emit events
 import { EventEmitter } from "events";
+
+// For the web server, we'll use express to handle both serving pages and
+// websockets. It plays nicely with glitch, has lots of good tutorial articles
+// out there, and usually "just works".
 import express from "express";
 import expressWs from "express-ws";
 
+// First off, we'll set up our app. Since we need both websockets and webpages
+// served, we have to wrap the express instance in a websocket instance.
 const app = expressWs(express()).app;
 
+// Set up our global status. These variables track connections to the server. We
+// only ever want one connection at a time on any endpoint, and this is how we
+// keep track.
 
+// True if someone is connected to the forwarder endpoint (which means they are
+// sharing their hardware for someone else to control)
 let forwarder_connected = false;
+
+// True if someone is connected to the status endpoint. This will usually be the
+// same user that is connected to the forwarder endpoint, as this endpoint will
+// give them updates about whether someone has connected to control their
+// hardware.
 let status_connected = false;
+
+// True if someone is connected to the remote endpoint, meaning they are trying
+// to control the toys of whoever is connected to the forwarder endpoint.
 let remote_connected = false;
 
+// The status emitter class exists as a "hub" class. We make a single global
+// version of it, then our endpoints can fire events through it to notify each
+// other of happenings on their endpoints. At the moment, this just tracks
+// connects and disconnects, so that we can let the sharer know a controller has
+// connected, disconnect the controller if the sharer disconnects, etc...
 class StatusEmitter extends EventEmitter {
   public emitLocalDisconnect() {
     this.emit("local_disconnect");
@@ -27,11 +103,15 @@ class StatusEmitter extends EventEmitter {
 
 let status_emitter = new StatusEmitter();
 
+// Now we actually start listening on a port. If this is running on glitch, that
+// port will be 3000. Otherwise, it will be random. We output the port number to
+// the command line.
 const listener = app.listen(process.env.PORT, () => {
   console.log("Your app is listening on port " + (listener.address()! as any).port);
 });
 
-
+// Check to make sure that passwords have been set and loaded. Otherwise,
+// complain whenever anyone tries to connect to any endpoint.
 let can_run = true;
 if (process.env.LOCAL_PASSWORD === "" || process.env.LOCAL_PASSWORD === undefined ||
   process.env.REMOTE_PASSWORD === "" || process.env.REMOTE_PASSWORD === undefined) {
@@ -49,6 +129,10 @@ if (process.env.LOCAL_PASSWORD === "" || process.env.LOCAL_PASSWORD === undefine
   });
   can_run = false;
 }
+
+////////////////////////////////////////////////////////////////////////////////
+// App Setup
+////////////////////////////////////////////////////////////////////////////////
 function run_app() {
   app.use(express.static(__dirname + "/app"));
 
@@ -322,6 +406,8 @@ function run_app() {
   main().then(() => console.log("Server Started"));
 }
 
+// If passwords have been found, actually set up endpoints and allow users to
+// connect.
 if (can_run) {
   run_app();
 }
