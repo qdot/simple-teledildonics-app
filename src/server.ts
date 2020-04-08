@@ -304,10 +304,10 @@ function run_app() {
   // protocol, which has no way to encode this information. Therefore, we just
   // make another endpoint specifically for this purpose.
   class StatusHandler {
-    // Set to true once authorization has happened.
-    private password_sent = false;
-
     public constructor(private client: any) {
+      // Set to true once authorization has happened.
+      let password_sent = false;
+
       // If we error, bail.
       client.on("error", (err) => {
         console.log(`Error in websocket connection: ${err.message}`);
@@ -327,10 +327,10 @@ function run_app() {
         // This is the same flow as the ButtplugServerForwarderConnector. Only
         // the sharer should be able to access the status endpoint, so we run
         // the password auth here too.
-        if (!this.password_sent) {
+        if (!password_sent) {
           if (message === process.env.LOCAL_PASSWORD) {
             console.log("Client gave correct password.");
-            this.password_sent = true;
+            password_sent = true;
             client.send("ok");
           } else {
             console.log("Client gave invalid local password, disconnecting.");
@@ -412,6 +412,7 @@ function run_app() {
       super(name, maxPingTime);
     }
 
+    // We'll just kill this server on disconnect, so assume it's always live.
     public get IsRunning(): boolean {
       return true;
     }
@@ -421,28 +422,34 @@ function run_app() {
       await this.Shutdown();
     }
 
-    /**
-     * Used to set up server after Websocket connection created.
-     */
+    // Once we've got a remote connection, set it up here.
     public InitServer = (wsClient: any) => {
-      const bs: ButtplugServer = this;
       let password_sent = false;
+      // Same drill as the websocket setups above. If we error or close, clear
+      // our connection status and emit.
       wsClient.on("error", (err) => {
         console.log(`Error in websocket connection: ${err.message}`);
         wsClient.terminate();
+        status_emitter.emitRemoteDisconnect();
+        remote_connected = false;
       });
       wsClient.on("close", () => {
         console.log("Remote connection closed.");
         status_emitter.emitRemoteDisconnect();
         remote_connected = false;
       });
+      // If we see that the sharer disconnected, we should kick the controller
+      // too.
       status_emitter.addListener("local_disconnect", () => {
         wsClient.close()
       });
       wsClient.on("message", async (message) => {
-        console.log(message);
-        // Expect the password to be a plaintext string. We'll depend
-        // on SSL for the encryption. Security? :(
+        // The first thing we'll get in a connection is the password. If it
+        // doesn't match what we expect, we just close the connection.
+        //
+        // Expect the password to be a plaintext string. We'll depend on SSL for
+        // the encryption here. If you run this over unencrypted links, you
+        // might want to fix this. But please, don't do that.
         if (!password_sent) {
           if (message === process.env.REMOTE_PASSWORD) {
             console.log("Remote client gave correct password.");
@@ -455,38 +462,43 @@ function run_app() {
           // Bail before we start parsing JSON
           return;
         }
+
+        // If we've gotten the password, we expect to be receiving JSON from the
+        // controller. This means we're now basically functioning as a proxy
+        // here.
+        //
+        // Unpack the JSON into a message object array, send it through our
+        // server (which will set it to the sharer), and once we get a response,
+        // send that back to the controller.
         const msg = FromJSON(message);
-        console.log("Sending message");
         for (const m of msg) {
           if (m.Type === RequestServerInfo) {
             status_emitter.emitRemoteConnect();
           }
-          console.log("Sending message to internal buttplug server instance:");
-          console.log(m);
-          const outgoing = await bs.SendMessage(m);
-          console.log(outgoing);
+          const outgoing = await this.SendMessage(m);
           // Make sure our message is packed in an array, as the buttplug spec
           // requires.
           wsClient.send("[" + outgoing.toJSON() + "]");
         }
       });
 
-      bs.on("message", (message) => {
+      // If our server emits a message for some reason, just shove it over to
+      // the controller.
+      this.on("message", (message) => {
         // Make sure our message is packed in an array, as the buttplug spec
         // requires.
-        console.log("incoming");
-        console.log(message);
         wsClient.send("[" + message.toJSON() + "]");
       });
+
+      // Now that we've finished socket setup, mark the controller as connected.
       remote_connected = true;
     }
   }
 
-  async function main(): Promise<void> {
-    ButtplugLogger.Logger.MaximumConsoleLogLevel = ButtplugLogLevel.Debug;
-  }
+  // This will set the library output to Debug. Handy for watching in the
+  // glitch logs.
 
-  main().then(() => console.log("Server Started"));
+  ButtplugLogger.Logger.MaximumConsoleLogLevel = ButtplugLogLevel.Debug;
 }
 
 // If passwords have been found, actually set up endpoints and allow users to
