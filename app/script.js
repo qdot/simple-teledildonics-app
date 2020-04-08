@@ -16,6 +16,9 @@ function create_vibration_controller(device_div, device) {
   slider.addEventListener("mouseup", async function (ev) {
     await device.SendVibrateCmd(slider.value / 100.0);
   });
+  slider.addEventListener("touchend", async function (ev) {
+    await device.SendVibrateCmd(slider.value / 100.0);
+  });
   const stop_button = document.getElementById(`${control_id}-stop`);
   stop_button.addEventListener("click", async () => device.SendStopDeviceCmd());
 }
@@ -32,6 +35,9 @@ function create_rotation_controller(device_div, device) {
   device_div.appendChild(control_div);
   const slider = document.getElementById(control_id);
   slider.addEventListener("mouseup", async function (ev) {
+    await device.SendRotateCmd(Math.abs(slider.value / 100.0), slider.value < 0);
+  });
+  slider.addEventListener("touchend", async function (ev) {
     await device.SendRotateCmd(Math.abs(slider.value / 100.0), slider.value < 0);
   });
   const stop_button = document.getElementById(`${control_id}-stop`);
@@ -74,6 +80,9 @@ function create_linear_controller(device_div, device) {
     setTimeout(() => run_oscillate(!goto_max), duration_slider.value)
   };
   checkbox.addEventListener("mouseup", () => {
+    if (checkbox.checked) run_oscillate(true);
+  });
+  checkbox.addEventListener("touchend", () => {
     if (checkbox.checked) run_oscillate(true);
   });
 }

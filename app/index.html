@@ -9,6 +9,12 @@
   <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate" />
   <meta http-equiv="Pragma" content="no-cache" />
   <meta http-equiv="Expires" content="0" />
+  <script>
+   // If we're not HTTPS, bluetooth won't be found. Force upgrade.
+   if (location.protocol != 'https:') {
+     location.href = 'https:' + window.location.href.substring(window.location.protocol.length);
+   }
+  </script>
   <script src="https://cdn.jsdelivr.net/npm/buttplug@0.13.1/dist/web/buttplug.min.js" defer></script>
   <script src="https://cdn.jsdelivr.net/npm/validator@13.0.0/validator.min.js" defer></script>
   <!-- import the webpage's javascript file -->
@@ -23,9 +29,9 @@
   <div>
     How to Use: <a href="https://github.com/qdot/simple-teledildonics-app/blob/master/README.md">Click here</a><br />
     Main Glitch Project: <a
-      href="https://glitch.com/edit/#!/qdot-simple-teledildonics-app">https://glitch.com/edit/#!/qdot-simple-teledildonics-app</a><br />
+                           href="https://glitch.com/edit/#!/qdot-simple-teledildonics-app">https://glitch.com/edit/#!/qdot-simple-teledildonics-app</a><br />
     Github Repo: <a
-      href="https://github.com/qdot/simple-teledildonics-app">https://github.com/qdot/simple-teledildonics-app</a><br />
+                   href="https://github.com/qdot/simple-teledildonics-app">https://github.com/qdot/simple-teledildonics-app</a><br />
   </div>
   <hr />
   <div>
