@@ -79,10 +79,7 @@ function create_linear_controller(device_div, device) {
     }
     setTimeout(() => run_oscillate(!goto_max), duration_slider.value)
   };
-  checkbox.addEventListener("mouseup", () => {
-    if (checkbox.checked) run_oscillate(true);
-  });
-  checkbox.addEventListener("touchend", () => {
+  checkbox.addEventListener("change", () => {
     if (checkbox.checked) run_oscillate(true);
   });
 }
