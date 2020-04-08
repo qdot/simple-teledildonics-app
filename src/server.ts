@@ -133,77 +133,118 @@ if (process.env.LOCAL_PASSWORD === "" || process.env.LOCAL_PASSWORD === undefine
 ////////////////////////////////////////////////////////////////////////////////
 // App Setup
 ////////////////////////////////////////////////////////////////////////////////
+
+// Endpoint setup and handling are wrapped in a function that we will only run
+// if passwords are set up.
 function run_app() {
+  // Serve everything in the app directory.
   app.use(express.static(__dirname + "/app"));
 
+  // We keep the device forwarder server as a global, because we need to set it
+  // up when the local side connects, then have the remote side connect to it as
+  // a client later. This requires it to be shared between endpoints.
   let server: ButtplugExpressWebsocketServer;
-  let connector: ButtplugServerForwardedNodeWebsocketConnector;
 
+  // The /forwarder endpoint is how the sharer side of a connection actually
+  // shares their devices. This uses a "forwarder", a structure in the buttplug
+  // library can take a ButtplugClientDevice and forward it to another server to
+  // make it look like it's owned by that server. Whenever a sharer connection
+  // happens, it connects to this endpoint and when a device's "share device"
+  // option is selected, it is forwarded through this so that a controller can
+  // send commands through it. The commands come through the forwarder, and back
+  // to the sharer's client. It looks something like this.
+  //
+  // Sharing a device:
+  //
+  // hardware device -> sharer buttplug server -> sharer buttplug client 
+  // -> forwarder device manager -> controller server -> controller client
+  //
+  // Sending a command to a shared device traverses this chain in the opposite
+  // direction.
   app.ws('/forwarder', (client, req) => {
     console.log("Got client connection for forwarder");
+    // We can only have one connection to the forwarder at a time here. A single
+    // forwarder could actually handle multiple sharers (meaning one controller
+    // could control multiple sharer's toys from the same interface), but we
+    // keep it to one here to keep things simple.
     if (forwarder_connected) {
       console.log("Someone tried to connect while we already have a connection. Connection closed.");
       client.close();
       return;
     }
+
+    // Set up the forwarder and server. First, we have to create a forwarder
+    // connector, which uses a websocket to listen for forwarder commands
+    // (AddDevice, RemoveDevice), and sends device commands from the controller
+    // back to the client that is connected to the forwarder. This connector
+    // class is defined below, so in-depth explanation will happen there.
+    let connector: ButtplugServerForwardedNodeWebsocketConnector;
     connector = new ButtplugServerForwardedNodeWebsocketConnector(client);
     console.log("Starting forwarder listener...");
     connector.Listen();
+
+    // Now we set up the server that will host forwarded devices.
     server = new ButtplugExpressWebsocketServer("Remote Server", 0);
+    
+    // Forwarded devices use a "device communication manager", which is another
+    // common structure in Buttplug. Device communication managers handle a
+    // certain class of devices: bluetooth devices, USB devices, etc... The
+    // forwarded device manager doesn't manage actual hardware, but instead
+    // manages proxies to devices running in other buttplug instances.
     const fdm = new ForwardedDeviceManager(undefined, connector);
     server.AddDeviceManager(fdm);
     console.log("Starting server...");
   });
 
-  /**
-   * Derives from the base ButtplugServer class, adds capabilities to the server
-   * for listening on and communicating with websockets in a native node
-   * application.
-   */
+  // ButtplugServerForwardedConnectors are what the ForwardedDeviceManager
+  // mentioned above uses to receive proxied devices. For this specific example,
+  // it will listen on a websocket, but we can proxy over any network or IPC
+  // connection.
+  //
+  // This will also handle some of our security, as the sharer password exchange
+  // happens here.
   class ButtplugServerForwardedNodeWebsocketConnector extends EventEmitter implements ButtplugServerForwardedConnector {
-    private wsClientClosure: (msg: string) => void;
 
     public constructor(private wsClient: any) {
       super();
     }
 
-    public get IsRunning(): boolean {
-      return true;
-    }
-
+    // We'll never want this to disconnect on the connector end. It should stay
+    // connected for the lifetime of the sharer's session.
     public Disconnect = (): Promise<void> => {
       return Promise.resolve();
     }
 
+    // Send a message to the sharer.
     public SendMessage = (msg: ButtplugMessage): Promise<void> => {
-      this.wsClientClosure("[" + msg.toJSON() + "]");
+      this.wsClient.send("[" + msg.toJSON() + "]");
       return Promise.resolve();
     }
 
-    /**
-     * Starts an insecure (non-ssl) instance of the server. This server will not
-     * be accessible from clients/applications running on https instances.
-     *
-     * @param port Network port to listen on (defaults to 12345)
-     * @param host Host address to listen on (defaults to localhost)
-     */
+    // The name here is a bit misleading, as since we're using expressWs, the
+    // listener is set up earlier. However, since this is expected to a server,
+    // we have to fill this in anyways, so we use this as a chance to set up the
+    // websocket client we've received.
     public Listen = (): Promise<void> => {
-      this.InitServer();
-      return Promise.resolve();
-    }
 
-    /**
-     * Used to set up server after Websocket connection created.
-     */
-    private InitServer = () => {
-
+      // This will be set to true once the password exchange has happened. See
+      // the "message" event handler for more info.
       let password_sent = false;
-      this.wsClientClosure = (msg: string) => this.wsClient.send(msg);
+      
+      // If the websocket errors out for some reason, just terminate connection.
       this.wsClient.on("error", (err) => {
         console.log(`Error in websocket connection: ${err.message}`);
+        forwarder_connected = false;
+        status_emitter.emitLocalDisconnect();
         this.wsClient.terminate();
         this.wsClient.removeAllListeners();
+        this.emit("disconnect");
       });
+
+      // If the websocket closes, we want to update our status so another sharer
+      // can connect (or the same one can reconnect), then let the rest of the
+      // system know that the sharer disconnected, so we can do things like
+      // kicking the controller out too.
       this.wsClient.on("close", () => {
         console.log("Local side disconnected");
         forwarder_connected = false;
@@ -211,14 +252,25 @@ function run_app() {
         this.wsClient.removeAllListeners();
         this.emit("disconnect");
       });
+
+      // If we get a message, a couple of things can happen, so just keep
+      // reading the internal comments.
       this.wsClient.on("message", async (message) => {
-        console.log(message);
-        // Expect the password to be a plaintext string. We'll depend
-        // on SSL for the encryption. Security? :(
+        // The first thing we'll get in a connection is the password. If it
+        // doesn't match what we expect, we just close the connection.
+        //
+        // Expect the password to be a plaintext string. We'll depend on SSL for
+        // the encryption here. If you run this over unencrypted links, you
+        // might want to fix this. But please, don't do that.
         if (!password_sent) {
           if (message === process.env.LOCAL_PASSWORD) {
             console.log("Client gave correct password.");
+            // We got the correct password, so we can bypass the check from now
+            // on.
             password_sent = true;
+            // If the password is correct, we just send back "ok". From here on
+            // out, everything is expected to be Buttplug Protocol JSON
+            // messages.
             this.wsClient.send("ok");
           } else {
             console.log("Client gave invalid local password, disconnecting.");
@@ -226,38 +278,55 @@ function run_app() {
             this.wsClient.removeAllListeners();
             return;
           }
-          // Bail before we start parsing JSON
+          // Set our sharer connected status, then bail before we start parsing
+          // JSON
           forwarder_connected = true;
           return;
         }
+
+        // If we've already gotten the password, we expect that we're getting a
+        // JSON array of Buttplug messages. Convert it from JSON to a message
+        // object array and emit one-by-one. 
         const msg = FromJSON(message);
         for (const m of msg) {
           console.log(m);
           this.emit("message", m);
         }
       });
+      // This function can sometimes be async. Now is not one of those times.
+      return Promise.resolve();
     }
   }
 
+  // We need a way to tell the sharer when a controller has connected, so they
+  // can know to expect possible control changes with their hardware.
+  // Unfortunately, every other connection in the server is tied to the Buttplug
+  // protocol, which has no way to encode this information. Therefore, we just
+  // make another endpoint specifically for this purpose.
   class StatusHandler {
+    // Set to true once authorization has happened.
     private password_sent = false;
 
     public constructor(private client: any) {
+      // If we error, bail.
       client.on("error", (err) => {
         console.log(`Error in websocket connection: ${err.message}`);
         status_connected = false;
         client.terminate();
         client.removeAllListeners();
       });
+      // If we close, clear out connection status and bail. This will usually
+      // only happen when the sharer disconnects from everything.
       client.on("close", () => {
         console.log("Status disconnected");
         status_connected = false;
         client.removeAllListeners();
       });
+      // 
       client.on("message", async (message) => {
-        console.log(message);
-        // Expect the password to be a plaintext string. We'll depend
-        // on SSL for the encryption. Security? :(
+        // This is the same flow as the ButtplugServerForwarderConnector. Only
+        // the sharer should be able to access the status endpoint, so we run
+        // the password auth here too.
         if (!this.password_sent) {
           if (message === process.env.LOCAL_PASSWORD) {
             console.log("Client gave correct password.");
@@ -269,6 +338,9 @@ function run_app() {
             client.removeAllListeners();
             return;
           }
+          // If the controller connects or disconnects, relay that info to the
+          // sharer so the UI will update. Just use an arbitrary JSON format for
+          // now.
           status_emitter.addListener("remote_connect", () => {
             if (status_connected) {
               try {
@@ -287,13 +359,16 @@ function run_app() {
               }
             }
           });
-          // Bail before we start parsing JSON
+          // We should only have one connection to the status endpoint at a
+          // time.
           status_connected = true;
         }
       });
     }
   }
 
+  // Set up the status endpoint. The sharer must already be connected, and there
+  // should be no connections to the status endpoint yet.
   app.ws("/status", (client, req) => {
     if (!forwarder_connected) {
       console.log("forwarder must connect before status endpoint connects.");
@@ -308,20 +383,30 @@ function run_app() {
     const handler = new StatusHandler(client);
   });
 
+  // Set up the controller connection endpoint. This will forwarded shared
+  // devices to the controller so they can access them.
   app.ws('/', (client, req) => {
+    // The controller can only connect after the sharer has connected. Not a
+    // requirement, just seems like a flow that makes more sense.
     if (!forwarder_connected) {
       console.log("Remote client disconnected because local client not active.");
       client.close();
       return;
     }
+    // We can only have one controller connected at a time.
     if (remote_connected) {
       console.log("Remote client already connected, disconnecting new client.");
       client.close();
       return;
     }
+
+    // Set this websocket client up to talk to the forwarded device server.
     server.InitServer(client);
   });
 
+  // Unlike Buttplug Clients and their "Connector" classes, for exposing servers
+  // we usually wrap the ButtplugServer object somehow. Since we have
+  // inheritance in Typescript/Javascript, we'll use that.
   class ButtplugExpressWebsocketServer extends ButtplugServer {
     public constructor(name: string, maxPingTime: number = 0) {
       super(name, maxPingTime);
@@ -331,9 +416,7 @@ function run_app() {
       return true;
     }
 
-    /**
-     * Shuts down the server, closing all connections.
-     */
+    // Shuts down the server, closing all connections.
     public StopServer = async (): Promise<void> => {
       await this.Shutdown();
     }
