@@ -427,12 +427,15 @@ const startRemoteConnection = async function () {
   client.addListener("disconnect", () => {
     set_remote_error("Remote side disconnected. Please try connecting again.");
     document.getElementById("remote-ident").style.display = "block";
-    document.getElementById("remote-disconnect").style.display = "none";
+    document.getElementById("remote-disconnect-div").style.display = "none";
   });
 
   await setup_client(client, connector, container);
   document.getElementById("remote-ident").style.display = "none";
-  document.getElementById("remote-disconnect").style.display = "block";
+  document.getElementById("remote-disconnect-div").style.display = "block";
+  document.getElementById("remote-disconnect").addEventListener("click", async () => {
+    await client.Disconnect();
+  });
 }
 
 // Default to the local domain as the remote, mostly for convenience.
