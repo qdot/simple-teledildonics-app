@@ -123,7 +123,7 @@ if (process.env.LOCAL_PASSWORD === "" || process.env.LOCAL_PASSWORD === undefine
     </head>
     <body>
     <h2>Please finish configuring app! Local and remote password need to be set!</h2>
-    <p>For more info see readme: <a href="https://github.com/qdot/buttplug-forwarder-server/blob/master/README.md">Click here</a><br /></p>
+    <p>For more info see readme on the glitch project or <a href="https://github.com/qdot/simple-teledildonics-app/">the main github repo</a></p>
     </body>
     </html>`);
   });

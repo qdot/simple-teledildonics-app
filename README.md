@@ -38,7 +38,7 @@ you can control someone else's toys.
 
 The list of toys this app works with can be found here:
 
-https://iostindex.com/?filter0Availability=Available,DIY&filter1ButtplugSupport=2
+[https://iostindex.com/?filter0Availability=Available,DIY&filter1ButtplugSupport=2](https://iostindex.com/?filter0Availability=Available,DIY&filter1ButtplugSupport=2)
 
 Note that Gamepad Haptics should also work (for instance, xbox controllers on
 windows), but you will need to connect them to your PC and press a button on the
@@ -55,7 +55,7 @@ Once this is done:
 
 - In the glitch editor, edit the .env file to add a local and remote password.
 - Go to the app website. For instance, with the app above, that would be
-  (https://qdot-simple-teledildonics-app.glitch.me)[https://qdot-simple-teledildonics-app.glitch.me].
+  [https://qdot-simple-teledildonics-app.glitch.me](https://qdot-simple-teledildonics-app.glitch.me).
   The domain name will be different for your remixed version.
 - Enter the local password, and hit the Connect button.
 - Hit "Start Scanning", and the WebBluetooth scan dialog should come up. Once it
@@ -87,6 +87,14 @@ settings.
 If the person you are controlling disconnects from the app, you will also be
 disconnected.
 
+## Getting Help
+
+If you need some help with the app, there are a few places to go!
+
+- [Message @buttplugio on twitter](https://twitter.com/buttplugio)
+- [Join our discord server](https://discord.buttplug.io)
+- [Ask on our forums](https://metafetish.club)
+
 ## FAQ
 
 - Why doesn't this work with [Intiface Desktop](https://intiface.com/desktop)?
@@ -112,3 +120,13 @@ disconnected.
     otherwise passwords will go over the network in plaintext and WebBluetooth
     will not work. The only time this app should be run without SSL is if you're
     testing on localhost.
+- Why won't bluetooth scanning work on linux?
+  - You'll need to turn on "Experimetal Web Platform Features" in
+    chrome://flags for WebBluetooth to work on linux.
+- Why can't the app find my hardware, or can't connect to it?
+  - There are a couple of possibilities for this. Either we don't
+    support your hardware (see list above), or else WebBluetooth is
+    being flakey, which happens quite often. For instance, there are
+    known issues with Lovense toys and some versions of Android Chrome
+    at the moment. You can open the developer console on your browser
+    to see if errors are being thrown.
