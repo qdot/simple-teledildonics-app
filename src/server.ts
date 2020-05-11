@@ -48,7 +48,7 @@
 // Everything we'll need from the Buttplug library, which is a lot.
 import { ButtplugLogger, ButtplugServerForwardedConnector, ForwardedDeviceManager,
          FromJSON, ButtplugMessage, ButtplugLogLevel, ButtplugServer,
-         RequestServerInfo } from "buttplug"; 4
+         RequestServerInfo } from "buttplug";
 
 // We'll need to emit events
 import { EventEmitter } from "events";
